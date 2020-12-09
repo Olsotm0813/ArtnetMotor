@@ -1,0 +1,130 @@
+import sys
+import time
+from socket import (socket, AF_INET, SOCK_DGRAM)
+from struct import unpack
+import OPi.GPIO as GPIO
+
+UDP_IP = ""  # listen on all sockets- INADDR_ANY
+UDP_PORT = 0x1936  # Art-net is supposed to only use this address
+
+
+numOfMotors = 3         #setup motors and array of positions and targets
+motorPos = [0,0,0]
+motorTarget  = [0,0,0]
+
+GPIO.setboard(GPIO.ZERO)
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(5,GPIO.OUT)          #motor 1 direction pin
+GPIO.setup(7,GPIO.OUT)          #motor 1 setp pin
+GPIO.setup(13,GPIO.OUT)         #motor 2 direction pin
+GPIO.setup(15,GPIO.OUT)         #motor 2 step pin
+GPIO.setup(21,GPIO.OUT)         #motor 3 direction pin
+GPIO.setup(23,GPIO.OUT)         #motor 3 setp pin
+
+class ArtnetPacket:
+    ARTNET_HEADER = b'Art-Net\x00'
+    OP_OUTPUT = 0x0050
+
+    def __init__(self):
+        self.op_code = None
+        self.ver = None
+        self.sequence = None
+        self.physical = None
+        self.universe = None
+        self.length = None
+        self.data = None
+
+    @staticmethod
+    def unpack_raw_artnet_packet(raw_data):
+
+        if unpack('!8s', raw_data[:8])[0] != ArtnetPacket.ARTNET_HEADER:
+            return None
+
+        packet = ArtnetPacket()
+
+        # We can only handle data packets
+        (packet.op_code,) = unpack('!H', raw_data[8:10])
+        if packet.op_code != ArtnetPacket.OP_OUTPUT:
+            return None
+
+        (packet.op_code, packet.ver, packet.sequence, packet.physical,
+         packet.universe, packet.length) = unpack('!HHBBHH', raw_data[8:18])
+
+        (packet.universe,) = unpack('<H', raw_data[14:16])
+        (packet.data,) = unpack(
+            '{0}s'.format(int(packet.length)),
+            raw_data[18:18 + int(packet.length)])
+
+        return packet
+
+
+sock = socket(AF_INET, SOCK_DGRAM)  # UDP
+sock.bind((UDP_IP, UDP_PORT))
+lastSequence = 0
+lastTime = time.time()
+
+datas = []
+
+def ArtnetCheck():
+     packetCount = 0
+     data, addr = sock.recvfrom(1024)
+     packet = ArtnetPacket.unpack_raw_artnet_packet(data)
+
+     if packet!= None:          #if a packet is avaliable assign to artnet
+        packetCount += 1
+        while len(datas) < packet.universe + 1:
+            datas.append('')
+
+        datas[packet.universe ] = packet.data
+        for data in datas:
+            if len(data) > numOfMotors:                 # assign motors to a target distance
+                data = data[0:numOfMotors]
+                for x  in range(numOfMotors):
+                    motorTarget[x] = ord(data[x]) * 2
+                    print(str(x) + ": target-" + str(motorTarget[x]) + " Current-" + str(motorPos[x])) # print current position and target position
+
+def motorRun():
+        motorMove = True
+        for i in range(100):            #run up to 100 steps
+            time.sleep(.01)             #sleep to keep up with refresh rate of the driver
+            GPIO.output(7,0)
+            GPIO.output(15,0)
+            GPIO.output(23,0)
+            time.sleep(.01)
+            if motorPos[0] <  motorTarget[0]:
+                 GPIO.output(5,1)               #set motor to spin up
+                 GPIO.output(7,1)               #setp motor
+                 motorPos[0] += 1
+                 print("1:up")
+            if motorPos[0] >  motorTarget[0]:
+                 GPIO.output(5,0)               #set motor to spin down
+                 GPIO.output(7,1)               #step motor
+                 motorPos[0] -= 1
+                 print("1:down")
+            if motorPos[1] <  motorTarget[1]:
+                 GPIO.output(13,1)
+                 GPIO.output(15,1)
+                 motorPos[1] += 1
+                 print("2:up")
+            if motorPos[1] >  motorTarget[1]:
+                 GPIO.output(13,0)
+                 GPIO.output(15,1)
+                 motorPos[1] -= 1
+                 print("2:down")
+            if motorPos[2] <  motorTarget[2]:
+                 GPIO.output(21,1)
+                 GPIO.output(23,1)
+                 motorPos[2] += 1
+                 print("3:up")
+            if motorPos[2] >  motorTarget[2]:
+                 GPIO.output(21,0)
+                 GPIO.output(23,1)
+                 motorPos[2] -=  1
+                 print("3:down")
+            if motorPos[1] == motorTarget[1] & motorPos[2] == motorTarget[2] & motorPos[0] == motorTarget[2]:   #check if all motors are in posotion
+                motorMove = False
+                print("At Positon")  # debug
+                break
+while True:
+    ArtnetCheck()
+    motorRun()
