@@ -85,46 +85,48 @@ def ArtnetCheck():
 
 def motorRun():
         motorMove = True
-        for i in range(100):            #run up to 100 steps
-            time.sleep(.01)             #sleep to keep up with refresh rate of the driver
+        while True:             #run up to 100 steps
+            time.sleep(sleepTimer)
             GPIO.output(7,0)
             GPIO.output(15,0)
             GPIO.output(23,0)
-            time.sleep(.01)
+            time.sleep(sleepTimer)      #sleep so stepper can catch up
             if motorPos[0] <  motorTarget[0]:
                  GPIO.output(5,1)               #set motor to spin up
                  GPIO.output(7,1)               #setp motor
                  motorPos[0] += 1
-                 print("1:up")
+                 #print("1:up")
             if motorPos[0] >  motorTarget[0]:
                  GPIO.output(5,0)               #set motor to spin down
                  GPIO.output(7,1)               #step motor
                  motorPos[0] -= 1
-                 print("1:down")
+                 #print("1:down")
             if motorPos[1] <  motorTarget[1]:
                  GPIO.output(13,1)
                  GPIO.output(15,1)
                  motorPos[1] += 1
-                 print("2:up")
+                 #print("2:up")
             if motorPos[1] >  motorTarget[1]:
                  GPIO.output(13,0)
                  GPIO.output(15,1)
                  motorPos[1] -= 1
-                 print("2:down")
+                 #print("2:down")
             if motorPos[2] <  motorTarget[2]:
                  GPIO.output(21,1)
                  GPIO.output(23,1)
                  motorPos[2] += 1
-                 print("3:up")
+                 #print("3:up")
             if motorPos[2] >  motorTarget[2]:
                  GPIO.output(21,0)
                  GPIO.output(23,1)
                  motorPos[2] -=  1
-                 print("3:down")
-            if motorPos[1] == motorTarget[1] & motorPos[2] == motorTarget[2] & motorPos[0] == motorTarget[2]:   #check if all motors are in posotion
-                motorMove = False
-                print("At Positon")  # debug
-                break
+                 #print("3:down")
+motorthread = threading.Thread(target = motorRun)
+motorthread.daemon = True
+motorthread.start()
+
 while True:
     ArtnetCheck()
-    motorRun()
+
+
+
